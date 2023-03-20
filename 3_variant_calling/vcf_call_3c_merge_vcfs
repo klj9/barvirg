@@ -1,0 +1,68 @@
+#my filtering script failed to merge my variant and invariant vcfs, so I'll try to run a separate script to concatenate them
+
+#!/bin/sh
+
+#SBATCH -N 1
+#SBATCH -n 16
+#SBATCH -p wessinger-48core
+#SBATCH --job-name=merge_vcf_consensus
+
+
+cd $SLURM_SUBMIT_DIR
+
+
+#######
+#SETUP#
+#######
+
+########################
+#source appropriate environments to enable use of conda installs through batch submission
+source /home/klj9/.bashrc
+source /home/klj9/.bash_profile
+
+
+#activate conda environment with packages installed
+#need bcftools (v1.15.1 works)
+conda activate mapping
+
+#load vcftools (v0.1.17 on cluster works)
+module load vcftools
+
+
+#Location of unfiltered vcf, from script #2 in this pipeline.
+invcf="/work/klj9/barvirg/vcfs/unfiltered_vcf.gz"
+
+
+#path to the output directory for vcfs and gvcfs. Should be made already.
+outdir="/work/klj9/barvirg/vcfs"
+
+
+#number of cores used converting from gvcf to vcf
+numthreads=16
+
+
+########################
+
+#####
+#VCF FILTERING#
+#####
+
+
+#index both vcfs
+tabix $outdir/tmp-invariants.filtered.vcf.gz
+tabix $outdir/tmp-variants.filtered.vcf.gz
+
+
+#concatenate the two vcfs and remove tmp files
+bcftools concat $outdir/tmp-invariants.filtered.vcf.gz \
+ $outdir/tmp-variants.filtered.vcf.gz \
+ --threads $numthreads --allow-overlaps -Oz \
+ -o $outdir/filtered_consensus_ready.vcf.gz
+
+#you could uncomment this to remove the tmp files, but I prefer to remove by hand, in case something goes wrong with the script.
+#rm $outdir/tmp-invariants.filtered.bcf.gz*
+#rm $outdir/tmp-variants.filtered.bcf.gz*
+
+
+#index final merged file
+tabix $outdir/filtered_consensus_ready.vcf.gz
